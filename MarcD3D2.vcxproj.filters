@@ -40,5 +40,8 @@
     <None Include="marc02.fx">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="braynzar.jpg">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

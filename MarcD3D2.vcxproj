@@ -89,6 +89,7 @@
     <ClCompile Include="Base.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="braynzar.jpg" />
     <None Include="marc02.fx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

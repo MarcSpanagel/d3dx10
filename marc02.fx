@@ -8,16 +8,23 @@ matrix View;
 matrix Projection;
 matrix WVP;
 
+Texture2D DiffuseMap;
+
+SamplerState TriLinearSample
+{
+	Filter = MIN_MAG_MIP_LINEAR;
+};
+
 struct VS_INPUT
 {
     float4 Pos : POSITION;
-    float4 Color : COLOR;
+    float2 Tex : TEXCOORD;
 };
 
 struct PS_INPUT
 {
     float4 Pos : SV_POSITION;
-    float4 Color : COLOR;
+    float2 Tex : TEXCOORD;
 };
 
 PS_INPUT VS( VS_INPUT input )
@@ -27,13 +34,14 @@ PS_INPUT VS( VS_INPUT input )
     /*output.Pos = mul( input.Pos, World );
     output.Pos = mul( output.Pos, View );
     output.Pos = mul( output.Pos, Projection );*/
-    output.Color = input.Color;
+    output.Tex = input.Tex;
     return output;
 }
 
 float4 PS( PS_INPUT input) : SV_Target
 {
-    return input.Color;
+    float4 diffuse = DiffuseMap.Sample( TriLinearSample, input.Tex );
+    return diffuse;    // Set the color of the pixel to the corresponding texel in the loaded image is.
 }
 
 

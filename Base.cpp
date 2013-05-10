@@ -160,7 +160,7 @@ void Base::InitDevice() {
     descDepth.Height = height;
     descDepth.MipLevels = 1;
     descDepth.ArraySize = 1;
-    descDepth.Format = DXGI_FORMAT_D32_FLOAT;
+    descDepth.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
     descDepth.SampleDesc.Count = 1;
     descDepth.SampleDesc.Quality = 0;
     descDepth.Usage = D3D10_USAGE_DEFAULT;
@@ -170,11 +170,11 @@ void Base::InitDevice() {
     HR(g_pd3dDevice->CreateTexture2D( &descDepth, NULL, &g_pDepthStencil ));
 
     // Create the depth stencil view
-    D3D10_DEPTH_STENCIL_VIEW_DESC descDSV;
+    /*D3D10_DEPTH_STENCIL_VIEW_DESC descDSV;
     descDSV.Format = descDepth.Format;
     descDSV.ViewDimension = D3D10_DSV_DIMENSION_TEXTURE2D;
-    descDSV.Texture2D.MipSlice = 0;
-    HR(g_pd3dDevice->CreateDepthStencilView( g_pDepthStencil, &descDSV, &g_pDepthStencilView ));
+    descDSV.Texture2D.MipSlice = 0;*/
+    HR(g_pd3dDevice->CreateDepthStencilView( g_pDepthStencil, NULL, &g_pDepthStencilView ));
 
     g_pd3dDevice->OMSetRenderTargets( 1, &g_pRenderTargetView, g_pDepthStencilView );
 

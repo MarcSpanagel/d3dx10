@@ -37,13 +37,18 @@ private:
 	D3DXMATRIX                  g_Projection;
 	D3DXMATRIX                  g_WVP;
 	D3DXMATRIX					l_Scale;
-	D3DXMATRIX					l_Rot;
+	D3DXMATRIX					l_RotX;
+	D3DXMATRIX					l_RotY;
 	D3DXMATRIX					l_Transform;
 
 	UINT g_numIndices;
 	UINT g_numVertices;
 
 	ID3D10RasterizerState* WireFrame;
+
+	////////////////////new//////////////////////////////////////////////////////////////////////
+	ID3D10ShaderResourceView* g_DiffuseMapResourceView;
+	ID3D10EffectShaderResourceVariable* fxDiffuseMapVar;
 };
 
 //--------------------------------------------------------------------------------------
@@ -75,6 +80,8 @@ Application::Application(HINSTANCE hInstance) : Base(hInstance) {
 	D3DXMatrixIdentity(&g_View);
 	D3DXMatrixIdentity(&g_Projection);
 	D3DXMatrixIdentity(&g_WVP);
+	D3DXMatrixIdentity(&l_RotX);
+	D3DXMatrixIdentity(&l_RotY);
 }
 
 Application::~Application() 
@@ -82,6 +89,7 @@ Application::~Application()
 	if( g_pIndexBuffer ) g_pIndexBuffer->Release();
     if( g_pVertexLayout ) g_pVertexLayout->Release();
     if( g_pVertexBuffer ) g_pVertexBuffer->Release();
+	if( g_DiffuseMapResourceView ) g_DiffuseMapResourceView->Release();
 }
 
 void Application::initApp() 
@@ -106,13 +114,13 @@ HRESULT Application::SetupViewAndBuffer()
 		return 0;
 	}
 
-	if ( FAILED(InitWireframe()) ) 
+	/*if ( FAILED(InitWireframe()) ) 
 	{
 		CleanupDevice();
 		MessageBox(0, L"RasterizerStateCreation - Failed",
 			L"Error", MB_OK);
 		return 0;
-	}
+	}*/
 
 	// Set the input layout
     g_pd3dDevice->IASetInputLayout( g_pVertexLayout );
@@ -172,12 +180,15 @@ HRESULT Application::CreateFX()
 		}
 		return hr;
 	}
+	// ShaderResourceView von der Texture erzeugen:
+	D3DX10CreateShaderResourceViewFromFile(g_pd3dDevice, 
+		L"braynzar.jpg", 0, 0, &g_DiffuseMapResourceView, 0 );
 
 	g_pTechniqueRender = g_pEffect->GetTechniqueByName("Render");
 
-	// TODO Hier die Variablen aus dem FX-File holen:
+	// Hier die Variablen aus dem FX-File holen:
 	// ---------------------------
-	
+	fxDiffuseMapVar = g_pEffect->GetVariableByName("DiffuseMap")->AsShaderResource();
 	g_pWorldVariable = g_pEffect->GetVariableByName( "World" )->AsMatrix();
     g_pViewVariable = g_pEffect->GetVariableByName( "View" )->AsMatrix();
     g_pProjectionVariable = g_pEffect->GetVariableByName( "Projection" )->AsMatrix();
@@ -189,7 +200,7 @@ HRESULT Application::CreateFX()
 	{
 		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
 		D3D10_INPUT_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12,
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
 		D3D10_INPUT_PER_VERTEX_DATA, 0 },
 	};
 	UINT numElements = sizeof(layout) / sizeof(layout[0]);
@@ -212,65 +223,109 @@ HRESULT Application::CreateVertices()
 {
 	HRESULT hr = 0;
 	// Vertexzahl und -seiten initialisieren
-	g_numVertices = 5;
-	g_numIndices = 18;
+	g_numVertices = 12;
+	g_numIndices = 12;
 
-	/*Vertex vertices[] = 
-	{
-		{D3DXVECTOR3(-1.0f, 1.0f, -1.0f), D3DXVECTOR4(0.0f, 0.0f, 1.0f, 1.0f) },
-		{D3DXVECTOR3(-1.0f, 1.0f,  1.0f), D3DXVECTOR4(0.0f, 0.0f, 1.0f, 1.0f) },
-		{D3DXVECTOR3(-1.0f,-1.0f, -1.0f), D3DXVECTOR4(0.0f, 0.0f, 1.0f, 1.0f) },
-		{D3DXVECTOR3(-1.0f,-1.0f,  1.0f), D3DXVECTOR4(0.0f, 0.0f, 1.0f, 1.0f) },
-
-		//{D3DXVECTOR3( 1.0f, 1.0f, -1.0f), D3DXVECTOR4(0.0f, 0.0f, 1.0f, 1.0f) },
-		//{D3DXVECTOR3( 1.0f, 1.0f,  1.0f), D3DXVECTOR4(0.0f, 0.0f, 1.0f, 1.0f) },
-		//{D3DXVECTOR3( 1.0f,-1.0f, -1.0f), D3DXVECTOR4(0.0f, 0.0f, 1.0f, 1.0f) },
-		//{D3DXVECTOR3( 1.0f,-1.0f,  1.0f), D3DXVECTOR4(0.0f, 0.0f, 1.0f, 1.0f) },
-	};*/
-	Vertex vertices[] =
+	Vertex v[] =
     {
-		{D3DXVECTOR3( 0.0f, 1.0f, 5.0f ),D3DXVECTOR4(0.0f, 0.0f, 0.0f, 1.0f)},
-        {D3DXVECTOR3( -1.0f, -0.9f, 1.0f ),D3DXVECTOR4(0.0f, 1.0f, 1.0f, 1.0f)},
-        {D3DXVECTOR3( 1.0f, -0.9f, 1.0f),D3DXVECTOR4(1.0f, 0.0f, 1.0f, 1.0f)},
-		{D3DXVECTOR3( 1.0f, -0.9f, -0.5f),D3DXVECTOR4(1.0f, 0.0f, 1.0f, 1.0f)},
-		{D3DXVECTOR3( -1.0f, -0.9f, -0.5f),D3DXVECTOR4(1.0f, 1.0f, 0.0f, 1.0f)},
+		//Vorne
+		Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f ),
+		Vertex( 1.0f, -0.9f, 1.0f, 1.0f, 1.0f),
+        Vertex( -1.0f, -0.9f, 1.0f, 0.0f, 1.0f),
+        
+		//Rechts
+		Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f ),
+		Vertex( 1.0f, -0.9f, -0.9f, 1.0f, 1.0f), //hinten
+		Vertex( 1.0f, -0.9f, 1.0f, 0.0f, 1.0f),
+		
+		//Links
+		Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f ),
+		Vertex( -1.0f, -0.9f, 1.0f, 1.0f, 1.0f),
+		Vertex( 1.0f, -0.9f, -0.9f, 0.0f, 1.0f), //hinten
+		//unten
+		Vertex( 1.0f, -0.9f, -0.9f, 0.5f, 0.0f), //hinten
+		Vertex( -1.0f, -0.9f, 1.0f, 1.0f, 1.0f), //Vlinks
+		Vertex( 1.0f, -0.9f, 1.0f, 0.0f, 1.0f), //Vrechts
     };
+	//Vertex v[24];
 
-	 DWORD indices[] =
+	//// Front Face
+	//v[0] = Vertex(-1.0f, -1.0f, -1.0f, 0.0f, 1.0f);
+	//v[1] = Vertex(-1.0f,  1.0f, -1.0f, 0.0f, 0.0f);
+	//v[2] = Vertex( 1.0f,  1.0f, -1.0f, 1.0f, 0.0f);
+	//v[3] = Vertex( 1.0f, -1.0f, -1.0f, 1.0f, 1.0f);
+
+	//// Back Face
+	//v[4] = Vertex(-1.0f, -1.0f, 1.0f, 1.0f, 1.0f);
+	//v[5] = Vertex( 1.0f, -1.0f, 1.0f, 0.0f, 1.0f);
+	//v[6] = Vertex( 1.0f,  1.0f, 1.0f, 0.0f, 0.0f);
+	//v[7] = Vertex(-1.0f,  1.0f, 1.0f, 1.0f, 0.0f);
+
+	//// Top Face
+	//v[8]  = Vertex(-1.0f, 1.0f, -1.0f, 0.0f, 1.0f);
+	//v[9]  = Vertex(-1.0f, 1.0f,  1.0f, 0.0f, 0.0f);
+	//v[10] = Vertex( 1.0f, 1.0f,  1.0f, 1.0f, 0.0f);
+	//v[11] = Vertex( 1.0f, 1.0f, -1.0f, 1.0f, 1.0f);
+
+	//// Bottom Face
+	//v[12] = Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f);
+	//v[13] = Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f);
+	//v[14] = Vertex( 1.0f, -1.0f,  1.0f, 0.0f, 0.0f);
+	//v[15] = Vertex(-1.0f, -1.0f,  1.0f, 1.0f, 0.0f);
+
+	//// Left Face
+	//v[16] = Vertex(-1.0f, -1.0f,  1.0f, 0.0f, 1.0f);
+	//v[17] = Vertex(-1.0f,  1.0f,  1.0f, 0.0f, 0.0f);
+	//v[18] = Vertex(-1.0f,  1.0f, -1.0f, 1.0f, 0.0f);
+	//v[19] = Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f);
+
+	//// Right Face
+	//v[20] = Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f);
+	//v[21] = Vertex( 1.0f,  1.0f, -1.0f, 0.0f, 0.0f);
+	//v[22] = Vertex( 1.0f,  1.0f,  1.0f, 1.0f, 0.0f);
+	//v[23] = Vertex( 1.0f, -1.0f,  1.0f, 1.0f, 1.0f);
+
+	 DWORD i[] =
     {
-		0,2,1,
-		0,3,2,
-		0,4,3,
-		0,1,4,
-		4,1,2,
-		4,2,3
-        /*3,1,0,
-        2,1,3,
-
-        0,5,4,
-        1,5,0,
-
-        3,4,7,
-        0,4,3,
-
-        1,6,5,
-        2,6,1,
-
-        2,7,6,
-        3,7,2,
-
-        6,4,5,
-        7,4,6,*/
+		0,1,2,
+		3,4,5,
+		6,7,8,
+		9,10,11
     };
+	//DWORD i[36];
+
+	//// Front Face
+	//i[0] = 0; i[1] = 1; i[2] = 2;
+	//i[3] = 0; i[4] = 2; i[5] = 3;
+
+	//// Back Face
+	//i[6] = 4; i[7]  = 5; i[8]  = 6;
+	//i[9] = 4; i[10] = 6; i[11] = 7;
+
+	//// Top Face
+	//i[12] = 8; i[13] =  9; i[14] = 10;
+	//i[15] = 8; i[16] = 10; i[17] = 11;
+
+	//// Bottom Face
+	//i[18] = 12; i[19] = 13; i[20] = 14;
+	//i[21] = 12; i[22] = 14; i[23] = 15;
+
+	//// Left Face
+	//i[24] = 16; i[25] = 17; i[26] = 18;
+	//i[27] = 16; i[28] = 18; i[29] = 19;
+
+	//// Right Face
+	//i[30] = 20; i[31] = 21; i[32] = 22;
+	//i[33] = 20; i[34] = 22; i[35] = 23;
 
 	D3D10_BUFFER_DESC bd;
-	bd.Usage = D3D10_USAGE_DEFAULT;
+	bd.Usage = D3D10_USAGE_IMMUTABLE;//D3D10_USAGE_DEFAULT;
 	bd.ByteWidth = sizeof(Vertex) * g_numVertices;
 	bd.BindFlags = D3D10_BIND_VERTEX_BUFFER;
 	bd.CPUAccessFlags = 0;
 	bd.MiscFlags = 0;
 	D3D10_SUBRESOURCE_DATA InitData;
-	InitData.pSysMem = vertices;
+	InitData.pSysMem = v;
 	hr = g_pd3dDevice->CreateBuffer(&bd, &InitData, &g_pVertexBuffer);
 	if (FAILED(hr)) return hr;
 
@@ -281,12 +336,12 @@ HRESULT Application::CreateVertices()
 
 	// IndexBuffer erzeugen
 
-	bd.Usage = D3D10_USAGE_DEFAULT;
+	bd.Usage = D3D10_USAGE_IMMUTABLE;//D3D10_USAGE_DEFAULT;
 	bd.ByteWidth = sizeof(DWORD) * g_numIndices;
 	bd.BindFlags = D3D10_BIND_INDEX_BUFFER;
 	bd.CPUAccessFlags = 0;
 	bd.MiscFlags = 0;
-	InitData.pSysMem = indices;
+	InitData.pSysMem = i;
 	hr = g_pd3dDevice->CreateBuffer(&bd, &InitData, &g_pIndexBuffer);
 	if (FAILED(hr)) return hr;
 
@@ -317,11 +372,12 @@ void Application::Render()
     g_pd3dDevice->ClearRenderTargetView( g_pRenderTargetView, ClearColor );
 	
 	//
-    
-	D3DXMatrixScaling( &l_Scale, 0.3f, 0.3f,  0.3f); 
-	D3DXMatrixRotationY(&l_Rot, t );
-	D3DXMatrixMultiply(&l_Transform, &l_Scale, &l_Rot);
-	
+	D3DXMatrixIdentity(&l_Scale);
+	//D3DXMatrixScaling( &l_Scale, 0.6f, 0.6f,  0.6f); 
+	D3DXMatrixRotationYawPitchRoll(&l_RotY, t , t, t);
+	//D3DXMatrixRotationX(&l_RotX, t );
+	D3DXMatrixMultiply(&l_Transform, &l_RotX, &l_RotY);
+
 	g_WVP = g_World *l_Transform * g_View * g_Projection;
 	
 	// Update variables
@@ -329,6 +385,8 @@ void Application::Render()
     g_pViewVariable->SetMatrix( ( float* )&g_View );
     g_pProjectionVariable->SetMatrix( ( float* )&g_Projection );
 	g_WVPVariable->SetMatrix( (float*)&g_WVP );
+	// Texturevariable in FX setzen
+	fxDiffuseMapVar->SetResource(g_DiffuseMapResourceView);
 	
 	//
     // Clear the depth buffer to 1.0 (max depth)
