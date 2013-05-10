@@ -16,6 +16,8 @@ public:
 	void Render();
 	HRESULT CreateFX();
 	HRESULT CreateVertices();
+	HRESULT InitWireframe();
+
 
 private:
 	ID3D10EffectTechnique*      g_pTechniqueRender;
@@ -40,6 +42,8 @@ private:
 
 	UINT g_numIndices;
 	UINT g_numVertices;
+
+	ID3D10RasterizerState* WireFrame;
 };
 
 //--------------------------------------------------------------------------------------
@@ -102,15 +106,24 @@ HRESULT Application::SetupViewAndBuffer()
 		return 0;
 	}
 
+	if ( FAILED(InitWireframe()) ) 
+	{
+		CleanupDevice();
+		MessageBox(0, L"RasterizerStateCreation - Failed",
+			L"Error", MB_OK);
+		return 0;
+	}
+
 	// Set the input layout
     g_pd3dDevice->IASetInputLayout( g_pVertexLayout );
     // Set primitive topology
     g_pd3dDevice->IASetPrimitiveTopology( D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
+
     // Initialize the world matrices
     D3DXMatrixIdentity( &g_World );
     // Initialize the view matrix
 
-	D3DXVECTOR3 Eye( 0.0f, 5.0f,-10.0f );
+	D3DXVECTOR3 Eye( 0.0f, 5.0f,-5.0f );
     D3DXVECTOR3 At( 0.0f, 0.0f, 0.0f );
     D3DXVECTOR3 Up( 0.0f, 1.0f, 0.0f );
     D3DXMatrixLookAtLH( &g_View, &Eye, &At, &Up );
@@ -119,12 +132,27 @@ HRESULT Application::SetupViewAndBuffer()
     GetClientRect( g_hWnd, &rc );
     UINT width = rc.right - rc.left;
     UINT height = rc.bottom - rc.top;
-    D3DXMatrixPerspectiveFovLH( &g_Projection, ( float )D3DX_PI * 0.5f, width / ( FLOAT )height, 0.0001f, 100.0f );
+    D3DXMatrixPerspectiveFovLH( &g_Projection, ( float )D3DX_PI * 0.25f, width / ( FLOAT )height, 0.0001f, 100.0f );
 	
 
     return TRUE;
 }
 
+HRESULT Application::InitWireframe() 
+{
+	D3D10_RASTERIZER_DESC wfdesc;
+	ZeroMemory(&wfdesc, sizeof(D3D10_RASTERIZER_DESC));
+	wfdesc.FillMode = D3D10_FILL_WIREFRAME; //D3D10_FILL_SOLID->Default
+	wfdesc.CullMode = D3D10_CULL_FRONT;
+	wfdesc.FrontCounterClockwise = false;
+	HRESULT hr = g_pd3dDevice->CreateRasterizerState(&wfdesc, &WireFrame);
+
+	if(FAILED(hr))
+	{
+		return false;
+	}
+	g_pd3dDevice->RSSetState(WireFrame);
+}
 
 HRESULT Application::CreateFX()
 {
@@ -295,8 +323,6 @@ void Application::Render()
 	D3DXMatrixMultiply(&l_Transform, &l_Scale, &l_Rot);
 	
 	g_WVP = g_World *l_Transform * g_View * g_Projection;
-	
-    
 	
 	// Update variables
     g_pWorldVariable->SetMatrix( ( float* )&g_World );
