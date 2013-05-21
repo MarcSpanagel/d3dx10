@@ -170,11 +170,11 @@ void Base::InitDevice() {
     HR(g_pd3dDevice->CreateTexture2D( &descDepth, NULL, &g_pDepthStencil ));
 
     // Create the depth stencil view
-    /*D3D10_DEPTH_STENCIL_VIEW_DESC descDSV;
+    D3D10_DEPTH_STENCIL_VIEW_DESC descDSV;
     descDSV.Format = descDepth.Format;
     descDSV.ViewDimension = D3D10_DSV_DIMENSION_TEXTURE2D;
-    descDSV.Texture2D.MipSlice = 0;*/
-    HR(g_pd3dDevice->CreateDepthStencilView( g_pDepthStencil, NULL, &g_pDepthStencilView ));
+    descDSV.Texture2D.MipSlice = 0;
+    HR(g_pd3dDevice->CreateDepthStencilView( g_pDepthStencil, &descDSV, &g_pDepthStencilView ));
 
     g_pd3dDevice->OMSetRenderTargets( 1, &g_pRenderTargetView, g_pDepthStencilView );
 

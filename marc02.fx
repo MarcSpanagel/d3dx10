@@ -3,6 +3,16 @@
 //--------------------------------------------------------------------------------------
 // Constant Buffer Variables
 //--------------------------------------------------------------------------------------
+struct Light
+{
+	float3 dir;
+	float4 ambient;
+	float4 diffuse;
+};
+cbuffer dbPerFrame
+{
+	Light light;
+};
 matrix World;
 matrix View;
 matrix Projection;
@@ -19,18 +29,21 @@ struct VS_INPUT
 {
     float4 Pos : POSITION;
     float2 Tex : TEXCOORD;
+	float3 normal : NORMAL;
 };
 
 struct PS_INPUT
 {
     float4 Pos : SV_POSITION;
     float2 Tex : TEXCOORD;
+	float3 normal : NORMAL;
 };
 
 PS_INPUT VS( VS_INPUT input )
 {
     PS_INPUT output = (PS_INPUT)0;
 	output.Pos = mul( input.Pos, WVP );
+	output.normal = mul(input.normal, WVP);
     /*output.Pos = mul( input.Pos, World );
     output.Pos = mul( output.Pos, View );
     output.Pos = mul( output.Pos, Projection );*/
@@ -40,8 +53,12 @@ PS_INPUT VS( VS_INPUT input )
 
 float4 PS( PS_INPUT input) : SV_Target
 {
+	input.normal = normalize(input.normal);
     float4 diffuse = DiffuseMap.Sample( TriLinearSample, input.Tex );
-    return diffuse;    // Set the color of the pixel to the corresponding texel in the loaded image is.
+	float3 finalColor;
+	finalColor = diffuse * light.ambient;
+	finalColor += saturate(dot(light.dir, input.normal) * light.diffuse * diffuse);
+    return float4(finalColor, diffuse.a);    // Set the color of the pixel to the corresponding texel in the loaded image is.
 }
 
 

@@ -4,6 +4,7 @@
 #include "resource.h"
 #include "Base.h"
 #include "Vertex.h"
+#include "Light.h"
 
 
 class Application : public Base
@@ -29,6 +30,9 @@ private:
 	ID3D10EffectMatrixVariable* g_pViewVariable;
 	ID3D10EffectMatrixVariable* g_pProjectionVariable;
 	ID3D10EffectMatrixVariable* g_WVPVariable;
+
+	ID3D10EffectVariable* fxLightVar;
+
 	//ID3D10EffectVectorVariable* g_pLightDirVariable;
 	//ID3D10EffectVectorVariable* g_pLightColorVariable;
 	ID3D10EffectVectorVariable* g_pOutputColorVariable;
@@ -46,9 +50,10 @@ private:
 
 	ID3D10RasterizerState* WireFrame;
 
-	////////////////////new//////////////////////////////////////////////////////////////////////
 	ID3D10ShaderResourceView* g_DiffuseMapResourceView;
 	ID3D10EffectShaderResourceVariable* fxDiffuseMapVar;
+
+	Light light;
 };
 
 //--------------------------------------------------------------------------------------
@@ -193,7 +198,7 @@ HRESULT Application::CreateFX()
     g_pViewVariable = g_pEffect->GetVariableByName( "View" )->AsMatrix();
     g_pProjectionVariable = g_pEffect->GetVariableByName( "Projection" )->AsMatrix();
 	g_WVPVariable = g_pEffect->GetVariableByName("WVP")->AsMatrix();
-	
+	fxLightVar  = g_pEffect->GetVariableByName("light");
 	// ---------------------------
 
 	D3D10_INPUT_ELEMENT_DESC layout[] =
@@ -201,6 +206,8 @@ HRESULT Application::CreateFX()
 		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
 		D3D10_INPUT_PER_VERTEX_DATA, 0 },
 		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
+		D3D10_INPUT_PER_VERTEX_DATA, 0 },
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20,
 		D3D10_INPUT_PER_VERTEX_DATA, 0 },
 	};
 	UINT numElements = sizeof(layout) / sizeof(layout[0]);
@@ -221,78 +228,97 @@ HRESULT Application::CreateFX()
 
 HRESULT Application::CreateVertices()
 {
+	//Licht initialisieren
+	light.dir = D3DXVECTOR3(0.25f, 0.5f, -1.0f);
+	light.ambient = D3DXCOLOR(0.2f, 0.2f, 0.2f, 1.0f);
+	light.diffuse = D3DXCOLOR(1.0f, 1.0f, 1.0f, 1.0f);
+
 	HRESULT hr = 0;
 	// Vertexzahl und -seiten initialisieren
-	g_numVertices = 12;
-	g_numIndices = 12;
+	g_numVertices = 24;
+	g_numIndices = 36;
+	// Dies ist der Kegel:
+	//Vertex v[] =
+ //   {
+	//	//Vorne
+	//	Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f ),
+	//	Vertex( 1.0f, -0.9f, 1.0f, 1.0f, 1.0f, 1.0f, -0.9f, 1.0f),
+ //       Vertex( -1.0f, -0.9f, 1.0f, 0.0f, 1.0f, -1.0f, -0.9f, 1.0f),
+ //       
+	//	//Rechts
+	//	Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f , 0.0f, 1.0f, 2.0f),
+	//	Vertex( 1.0f, -0.9f, -0.9f, 1.0f, 1.0f, 1.0f, -0.9f, -0.9f), //hinten
+	//	Vertex( 1.0f, -0.9f, 1.0f, 0.0f, 1.0f, 1.0f, -0.9f, 1.0f),
+	//	
+	//	//Links
+	//	Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f, 0.0f, 1.0f, 2.0f ),
+	//	Vertex( -1.0f, -0.9f, 1.0f, 1.0f, 1.0f, -1.0f, -0.9f, 1.0f),
+	//	Vertex( 1.0f, -0.9f, -0.9f, 0.0f, 1.0f, 1.0f, -0.9f, -0.9f), //hinten
+	//	//unten
+	//	Vertex( 1.0f, -0.9f, -0.9f, 0.5f, 0.0f, 1.0f, -0.9f, -0.9f), //hinten
+	//	Vertex( -1.0f, -0.9f, 1.0f, 1.0f, 1.0f, -1.0f, -0.9f, 1.0f), //Vlinks
+	//	Vertex( 1.0f, -0.9f, 1.0f, 0.0f, 1.0f, 1.0f, -0.9f, 1.0f), //Vrechts
+ //   };
+	Vertex v[24];
+	// Front Face
+	v[0] = Vertex(-1.0f, -1.0f, -1.0f, 0.0f, 1.0f,-1.0f, -1.0f, -1.0f);
+	v[1] = Vertex(-1.0f,  1.0f, -1.0f, 0.0f, 0.0f,-1.0f,  1.0f, -1.0f);
+	v[2] = Vertex( 1.0f,  1.0f, -1.0f, 1.0f, 0.0f, 1.0f,  1.0f, -1.0f);
+	v[3] = Vertex( 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, -1.0f, -1.0f);
 
-	Vertex v[] =
-    {
-		//Vorne
-		Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f ),
-		Vertex( 1.0f, -0.9f, 1.0f, 1.0f, 1.0f),
-        Vertex( -1.0f, -0.9f, 1.0f, 0.0f, 1.0f),
-        
-		//Rechts
-		Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f ),
-		Vertex( 1.0f, -0.9f, -0.9f, 1.0f, 1.0f), //hinten
-		Vertex( 1.0f, -0.9f, 1.0f, 0.0f, 1.0f),
-		
-		//Links
-		Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f ),
-		Vertex( -1.0f, -0.9f, 1.0f, 1.0f, 1.0f),
-		Vertex( 1.0f, -0.9f, -0.9f, 0.0f, 1.0f), //hinten
-		//unten
-		Vertex( 1.0f, -0.9f, -0.9f, 0.5f, 0.0f), //hinten
-		Vertex( -1.0f, -0.9f, 1.0f, 1.0f, 1.0f), //Vlinks
-		Vertex( 1.0f, -0.9f, 1.0f, 0.0f, 1.0f), //Vrechts
-    };
-	//Vertex v[24];
+	// Back Face
+	v[4] = Vertex(-1.0f, -1.0f, 1.0f, 1.0f, 1.0f,-1.0f, -1.0f, 1.0f);
+	v[5] = Vertex( 1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, -1.0f, 1.0f);
+	v[6] = Vertex( 1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,  1.0f, 1.0f);
+	v[7] = Vertex(-1.0f,  1.0f, 1.0f, 1.0f, 0.0f,-1.0f,  1.0f, 1.0f);
 
-	//// Front Face
-	//v[0] = Vertex(-1.0f, -1.0f, -1.0f, 0.0f, 1.0f);
-	//v[1] = Vertex(-1.0f,  1.0f, -1.0f, 0.0f, 0.0f);
-	//v[2] = Vertex( 1.0f,  1.0f, -1.0f, 1.0f, 0.0f);
-	//v[3] = Vertex( 1.0f, -1.0f, -1.0f, 1.0f, 1.0f);
+	// Top Face
+	v[8]  = Vertex(-1.0f, 1.0f, -1.0f, 0.0f, 1.0f,-1.0f, 1.0f, -1.0f);
+	v[9]  = Vertex(-1.0f, 1.0f,  1.0f, 0.0f, 0.0f,-1.0f, 1.0f,  1.0f);
+	v[10] = Vertex( 1.0f, 1.0f,  1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f);
+	v[11] = Vertex( 1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f);
 
-	//// Back Face
-	//v[4] = Vertex(-1.0f, -1.0f, 1.0f, 1.0f, 1.0f);
-	//v[5] = Vertex( 1.0f, -1.0f, 1.0f, 0.0f, 1.0f);
-	//v[6] = Vertex( 1.0f,  1.0f, 1.0f, 0.0f, 0.0f);
-	//v[7] = Vertex(-1.0f,  1.0f, 1.0f, 1.0f, 0.0f);
+	// Bottom Face
+	v[12] = Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f,-1.0f, -1.0f, -1.0f);
+	v[13] = Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f, 1.0f, -1.0f, -1.0f);
+	v[14] = Vertex( 1.0f, -1.0f,  1.0f, 0.0f, 0.0f, 1.0f, -1.0f,  1.0f);
+	v[15] = Vertex(-1.0f, -1.0f,  1.0f, 1.0f, 0.0f,-1.0f, -1.0f,  1.0f);
 
-	//// Top Face
-	//v[8]  = Vertex(-1.0f, 1.0f, -1.0f, 0.0f, 1.0f);
-	//v[9]  = Vertex(-1.0f, 1.0f,  1.0f, 0.0f, 0.0f);
-	//v[10] = Vertex( 1.0f, 1.0f,  1.0f, 1.0f, 0.0f);
-	//v[11] = Vertex( 1.0f, 1.0f, -1.0f, 1.0f, 1.0f);
+	// Left Face
+	v[16] = Vertex(-1.0f, -1.0f,  1.0f, 0.0f, 1.0f,-1.0f, -1.0f,  1.0f);
+	v[17] = Vertex(-1.0f,  1.0f,  1.0f, 0.0f, 0.0f,-1.0f,  1.0f,  1.0f);
+	v[18] = Vertex(-1.0f,  1.0f, -1.0f, 1.0f, 0.0f,-1.0f,  1.0f, -1.0f);
+	v[19] = Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f,-1.0f, -1.0f, -1.0f);
 
-	//// Bottom Face
-	//v[12] = Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f);
-	//v[13] = Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f);
-	//v[14] = Vertex( 1.0f, -1.0f,  1.0f, 0.0f, 0.0f);
-	//v[15] = Vertex(-1.0f, -1.0f,  1.0f, 1.0f, 0.0f);
+	// Right Face
+	v[20] = Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f, 1.0f, -1.0f, -1.0f);
+	v[21] = Vertex( 1.0f,  1.0f, -1.0f, 0.0f, 0.0f, 1.0f,  1.0f, -1.0f);
+	v[22] = Vertex( 1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 1.0f,  1.0f,  1.0f);
+	v[23] = Vertex( 1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, -1.0f,  1.0f);
 
-	//// Left Face
-	//v[16] = Vertex(-1.0f, -1.0f,  1.0f, 0.0f, 1.0f);
-	//v[17] = Vertex(-1.0f,  1.0f,  1.0f, 0.0f, 0.0f);
-	//v[18] = Vertex(-1.0f,  1.0f, -1.0f, 1.0f, 0.0f);
-	//v[19] = Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f);
-
-	//// Right Face
-	//v[20] = Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f);
-	//v[21] = Vertex( 1.0f,  1.0f, -1.0f, 0.0f, 0.0f);
-	//v[22] = Vertex( 1.0f,  1.0f,  1.0f, 1.0f, 0.0f);
-	//v[23] = Vertex( 1.0f, -1.0f,  1.0f, 1.0f, 1.0f);
-
-	 DWORD i[] =
+	//  Index für Kegel
+	/*DWORD i[] =
     {
 		0,1,2,
 		3,4,5,
 		6,7,8,
 		9,10,11
-    };
-	//DWORD i[36];
+    };*/
+	DWORD i[36] =
+	{
+		0,1,2,
+		0,2,3,
+		4,5,6,
+		4,6,7,
+		8,9,10,
+		8,10,11,
+		12,13,14,
+		12,14,15,
+		16,17,18,
+		16,18,19,
+		20,21,22,
+		20,22,23
+	};
 
 	//// Front Face
 	//i[0] = 0; i[1] = 1; i[2] = 2;
@@ -387,10 +413,11 @@ void Application::Render()
 	g_WVPVariable->SetMatrix( (float*)&g_WVP );
 	// Texturevariable in FX setzen
 	fxDiffuseMapVar->SetResource(g_DiffuseMapResourceView);
-	
+	fxLightVar->SetRawValue(&light, 0, sizeof(Light));
 	//
     // Clear the depth buffer to 1.0 (max depth)
-    //
+	
+	//
     g_pd3dDevice->ClearDepthStencilView( g_pDepthStencilView, D3D10_CLEAR_DEPTH, 1.0f, 0 );
 	//
     // Render the first cube

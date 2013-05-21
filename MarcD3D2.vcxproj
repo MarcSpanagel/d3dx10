@@ -81,6 +81,7 @@
   <ItemGroup>
     <ClInclude Include="Base.h" />
     <ClInclude Include="D3DUtil.h" />
+    <ClInclude Include="Light.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Vertex.h" />
   </ItemGroup>
