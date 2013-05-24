@@ -6,7 +6,6 @@
 #include "Vertex.h"
 #include "Light.h"
 
-
 class Application : public Base
 {
 public:
@@ -41,9 +40,10 @@ private:
 	D3DXMATRIX                  g_Projection;
 	D3DXMATRIX                  g_WVP;
 	D3DXMATRIX					l_Scale;
-	D3DXMATRIX					l_RotX;
-	D3DXMATRIX					l_RotY;
+	D3DXMATRIX					l_Translation;
+	D3DXMATRIX					l_Rotation;
 	D3DXMATRIX					l_Transform;
+	float rot;
 
 	UINT g_numIndices;
 	UINT g_numVertices;
@@ -85,8 +85,9 @@ Application::Application(HINSTANCE hInstance) : Base(hInstance) {
 	D3DXMatrixIdentity(&g_View);
 	D3DXMatrixIdentity(&g_Projection);
 	D3DXMatrixIdentity(&g_WVP);
-	D3DXMatrixIdentity(&l_RotX);
-	D3DXMatrixIdentity(&l_RotY);
+	D3DXMatrixIdentity(&l_Rotation);
+	D3DXMatrixIdentity(&l_Transform);
+	rot = 0.01f;;
 }
 
 Application::~Application() 
@@ -101,6 +102,12 @@ void Application::initApp()
 {
 	Base::InitWindow();
 	Base::InitDevice();
+	if(!Base::InitDirectInput(g_hInst))
+	{
+		MessageBox(0, L"Direct Input Initialization - Failed",
+			L"Error", MB_OK);
+		return;
+	}
 	SetupViewAndBuffer();
 }
 
@@ -136,7 +143,7 @@ HRESULT Application::SetupViewAndBuffer()
     D3DXMatrixIdentity( &g_World );
     // Initialize the view matrix
 
-	D3DXVECTOR3 Eye( 0.0f, 5.0f,-5.0f );
+	D3DXVECTOR3 Eye( 0.0f, 4.0f,-15.0f );
     D3DXVECTOR3 At( 0.0f, 0.0f, 0.0f );
     D3DXVECTOR3 Up( 0.0f, 1.0f, 0.0f );
     D3DXMatrixLookAtLH( &g_View, &Eye, &At, &Up );
@@ -230,7 +237,7 @@ HRESULT Application::CreateVertices()
 {
 	//Licht initialisieren
 	light.dir = D3DXVECTOR3(0.25f, 0.5f, -1.0f);
-	light.ambient = D3DXCOLOR(0.2f, 0.2f, 0.2f, 1.0f);
+	light.ambient = D3DXCOLOR(0.2f, 0.0f, 0.0f, 1.0f);
 	light.diffuse = D3DXCOLOR(1.0f, 1.0f, 1.0f, 1.0f);
 
 	HRESULT hr = 0;
@@ -398,11 +405,24 @@ void Application::Render()
     g_pd3dDevice->ClearRenderTargetView( g_pRenderTargetView, ClearColor );
 	
 	//
-	D3DXMatrixIdentity(&l_Scale);
-	//D3DXMatrixScaling( &l_Scale, 0.6f, 0.6f,  0.6f); 
-	D3DXMatrixRotationYawPitchRoll(&l_RotY, t , t, t);
-	//D3DXMatrixRotationX(&l_RotX, t );
-	D3DXMatrixMultiply(&l_Transform, &l_RotX, &l_RotY);
+
+	////////////////////Rotation//////////////////////////////////////////////////////////////////////
+	D3DXVECTOR3 rotyaxis(0.0f, 1.0f, 0.0f);
+	D3DXVECTOR3 rotzaxis(0.0f, 0.0f, 1.0f);
+	D3DXVECTOR3 rotxaxis(1.0f, 0.0f, 0.0f);
+
+	//D3DXMatrixRotationAxis(&l_Rotation, &rotyaxis, rot);
+	D3DXMatrixRotationAxis(&Rotationx, &rotxaxis, rotx);
+	D3DXMatrixRotationAxis(&Rotationz, &rotzaxis, rotz);
+	D3DXMatrixTranslation( &l_Translation, 0.0f, 0.0f, 4.0f );
+	l_Transform = l_Translation * l_Rotation * Rotationx * Rotationz;
+
+	rot += .0005f;
+
+	if ( rot > (float)6.283185 )
+		rot -=  (float)6.283185;
+	else if ( rot < 0 )
+		rot =  (float)6.283185 + rot;
 
 	g_WVP = g_World *l_Transform * g_View * g_Projection;
 	

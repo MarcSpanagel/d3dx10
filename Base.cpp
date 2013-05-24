@@ -1,5 +1,6 @@
 #include "Base.h"
 
+
 Base::Base(HINSTANCE hInstance)
 {
 	g_hInst = hInstance;
@@ -10,6 +11,8 @@ Base::Base(HINSTANCE hInstance)
 	g_pRenderTargetView = NULL;
 	g_pDepthStencil = NULL;
 	g_pDepthStencilView = NULL;
+	rotx = 0;
+	rotz = 0;
 }
 
 Base::~Base(void)
@@ -22,6 +25,9 @@ Base::~Base(void)
 	ReleaseCOM(g_pDepthStencil);
 	ReleaseCOM(g_pDepthStencilView);
 	ReleaseCOM(g_pDepthStencilView);
+	DIKeyboard->Unacquire();
+	DIMouse->Unacquire();
+	DirectInput->Release();
 }
 
 //--------------------------------------------------------------------------------------
@@ -62,6 +68,7 @@ int Base::Run() {
         }
         else
         {
+			DetectInput();
             Render();
         }
     }
@@ -187,6 +194,88 @@ void Base::InitDevice() {
     vp.TopLeftX = 0;
     vp.TopLeftY = 0;
     g_pd3dDevice->RSSetViewports( 1, &vp );
+}
+
+bool Base::InitDirectInput(HINSTANCE hInstance)
+{
+	DirectInput8Create(hInstance,
+		DIRECTINPUT_VERSION,
+		IID_IDirectInput8,
+		(void**)&DirectInput,
+		NULL); 
+
+	DirectInput->CreateDevice(GUID_SysKeyboard,
+		&DIKeyboard,
+		NULL);
+
+	DirectInput->CreateDevice(GUID_SysMouse,
+		&DIMouse,
+		NULL);
+
+	DIKeyboard->SetDataFormat(&c_dfDIKeyboard);
+	DIKeyboard->SetCooperativeLevel(g_hWnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
+
+	DIMouse->SetDataFormat(&c_dfDIMouse);
+	DIMouse->SetCooperativeLevel(g_hWnd, DISCL_EXCLUSIVE | DISCL_NOWINKEY | DISCL_FOREGROUND);
+
+	return true;
+}
+
+void Base::DetectInput()
+{
+	DIMOUSESTATE mouseCurrState;
+
+	BYTE keyboardState[256];
+
+	DIKeyboard->Acquire();
+	DIMouse->Acquire();
+
+	DIMouse->GetDeviceState(sizeof(DIMOUSESTATE), &mouseCurrState);
+
+	DIKeyboard->GetDeviceState(sizeof(keyboardState),(LPVOID)&keyboardState);
+	float r = 0.005f;
+
+	if(keyboardState[DIK_ESCAPE] & 0x80)
+		PostMessage(g_hWnd, WM_DESTROY, 0, 0);
+
+	if(keyboardState[DIK_LEFT] & 0x80)
+	{
+		rotz -= r;
+	}
+	if(keyboardState[DIK_RIGHT] & 0x80)
+	{
+		rotz += r;
+	}
+	if(keyboardState[DIK_UP] & 0x80)
+	{
+		rotx += r;
+	}
+	if(keyboardState[DIK_DOWN] & 0x80)
+	{
+		rotx -= r;
+	}
+	if(mouseCurrState.lX != mouseLastState.lX)
+	{
+		moveLR -= (mouseCurrState.lX * 0.001f);
+	}
+	if(mouseCurrState.lY != mouseLastState.lY)
+	{
+		moveUD += (mouseCurrState.lY * 0.001f);
+	}
+
+	if ( rotx > (float) 6.283185 )
+		rotx -=  (float)6.283185;
+	else if ( rotx < 0 )
+		rotx =  (float)6.283185 + rotx;
+
+	if ( rotz > (float)6.283185 )
+		rotz -=  (float)6.283185;
+	else if ( rotz < 0 )
+		rotz =  (float)6.283185 + rotz;
+
+	mouseLastState = mouseCurrState;
+
+	return;
 }
 
 void Base::Render() 
