@@ -5,6 +5,23 @@
 #include "Base.h"
 #include "Vertex.h"
 #include "Light.h"
+#include <fstream>
+#include <istream>
+#include <vector>
+#include <string>
+#include <iostream>
+
+using namespace std;
+
+D3D10_INPUT_ELEMENT_DESC layout[] =
+{
+	{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+	D3D10_INPUT_PER_VERTEX_DATA, 0 },
+	{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
+	D3D10_INPUT_PER_VERTEX_DATA, 0 },
+	{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20,
+	D3D10_INPUT_PER_VERTEX_DATA, 0 },
+};
 
 class Application : public Base
 {
@@ -17,6 +34,7 @@ public:
 	HRESULT CreateFX();
 	HRESULT CreateVertices();
 	HRESULT InitWireframe();
+	bool LoadMesh(wstring filename);
 
 
 private:
@@ -54,6 +72,12 @@ private:
 	ID3D10EffectShaderResourceVariable* fxDiffuseMapVar;
 
 	Light light;
+
+	vector<ID3DX10Mesh*> meshes;
+	int meshCount;
+	vector<UINT> meshSubsets;
+	int meshTextures;
+	vector<ID3D10ShaderResourceView*> TextureResourceViews;
 };
 
 //--------------------------------------------------------------------------------------
@@ -87,7 +111,8 @@ Application::Application(HINSTANCE hInstance) : Base(hInstance) {
 	D3DXMatrixIdentity(&g_WVP);
 	D3DXMatrixIdentity(&l_Rotation);
 	D3DXMatrixIdentity(&l_Transform);
-	rot = 0.01f;;
+	rot = 0.01f;
+	int meshTextures = 0;
 }
 
 Application::~Application() 
@@ -143,7 +168,7 @@ HRESULT Application::SetupViewAndBuffer()
     D3DXMatrixIdentity( &g_World );
     // Initialize the view matrix
 
-	D3DXVECTOR3 Eye( 0.0f, 4.0f,-15.0f );
+	D3DXVECTOR3 Eye( 0.0f, 4.0f,-11.0f );
     D3DXVECTOR3 At( 0.0f, 0.0f, 0.0f );
     D3DXVECTOR3 Up( 0.0f, 1.0f, 0.0f );
     D3DXMatrixLookAtLH( &g_View, &Eye, &At, &Up );
@@ -192,9 +217,6 @@ HRESULT Application::CreateFX()
 		}
 		return hr;
 	}
-	// ShaderResourceView von der Texture erzeugen:
-	D3DX10CreateShaderResourceViewFromFile(g_pd3dDevice, 
-		L"braynzar.jpg", 0, 0, &g_DiffuseMapResourceView, 0 );
 
 	g_pTechniqueRender = g_pEffect->GetTechniqueByName("Render");
 
@@ -208,15 +230,6 @@ HRESULT Application::CreateFX()
 	fxLightVar  = g_pEffect->GetVariableByName("light");
 	// ---------------------------
 
-	D3D10_INPUT_ELEMENT_DESC layout[] =
-	{
-		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
-		D3D10_INPUT_PER_VERTEX_DATA, 0 },
-		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
-		D3D10_INPUT_PER_VERTEX_DATA, 0 },
-		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20,
-		D3D10_INPUT_PER_VERTEX_DATA, 0 },
-	};
 	UINT numElements = sizeof(layout) / sizeof(layout[0]);
 
 	// -------------VertexLayout initialisieren----------------
@@ -233,155 +246,128 @@ HRESULT Application::CreateFX()
 	return hr;
 }
 
+bool Application::LoadMesh(wstring filename)
+{
+	HRESULT hr = 0;
+
+	ID3DX10Mesh* tempMesh; 
+
+	wifstream fileIn (filename.c_str());
+	wstring skipString;
+
+	UINT meshVertices  = 0;
+	UINT meshTriangles = 0;
+    UINT tempMeshSubsets = 0;
+
+	if (fileIn)
+	{
+		fileIn >> skipString; // #Subsets
+		fileIn >> tempMeshSubsets;
+		fileIn >> skipString; // #Vertices
+		fileIn >> meshVertices;
+		fileIn >> skipString; // #Faces (Triangles)
+		fileIn >> meshTriangles;
+        
+		meshSubsets.push_back(tempMeshSubsets);
+
+		hr = D3DX10CreateMesh(g_pd3dDevice,
+			layout, 
+			3, 
+			layout[0].SemanticName, 
+			meshVertices, 
+			meshTriangles, 
+			D3DX10_MESH_32_BIT, 
+			&tempMesh);
+
+		if(FAILED(hr))
+		{
+			MessageBox(0, L"Mesh Creation - Failed",
+				L"Error", MB_OK);
+			return false;
+		}
+
+		fileIn >> skipString;	//#Subset_info
+		for(UINT i = 0; i < tempMeshSubsets; ++i)
+		{
+			std::wstring diffuseMapFilename;
+
+			fileIn >> diffuseMapFilename;
+
+			ID3D10ShaderResourceView* DiffuseMapResourceView;
+
+			D3DX10CreateShaderResourceViewFromFile(g_pd3dDevice,
+				diffuseMapFilename.c_str(), 0, 0, &DiffuseMapResourceView, 0 );
+
+			TextureResourceViews.push_back(DiffuseMapResourceView);
+
+			meshTextures++;
+		}
+
+		Vertex* verts = new Vertex[meshVertices];
+		fileIn >> skipString;	//#Vertex_info
+		for(UINT i = 0; i < meshVertices; ++i)
+		{
+			fileIn >> skipString;	//Vertex Position
+			fileIn >> verts[i].Pos.x;
+			fileIn >> verts[i].Pos.y;
+			fileIn >> verts[i].Pos.z;
+
+			fileIn >> skipString;	//Vertex Normal
+			fileIn >> verts[i].normal.x;
+			fileIn >> verts[i].normal.y;
+			fileIn >> verts[i].normal.z;
+
+			fileIn >> skipString;	//Vertex Texture Coordinates
+			fileIn >> verts[i].Tex.x;
+			fileIn >> verts[i].Tex.y;
+		}
+		tempMesh->SetVertexData(0, verts);
+
+		delete[] verts;
+
+		DWORD* indices = new DWORD[meshTriangles*3];
+		UINT* attributeIndex = new UINT[meshTriangles];
+		fileIn >> skipString;	//#Face_Index
+		for(UINT i = 0; i < meshTriangles; ++i)
+		{
+			fileIn >> indices[i*3+0];
+			fileIn >> indices[i*3+1];
+			fileIn >> indices[i*3+2];
+			fileIn >> attributeIndex[i];	//Current Subset
+		}
+		tempMesh->SetIndexData(indices, meshTriangles*3);
+		tempMesh->SetAttributeData(attributeIndex);
+
+		delete[] indices;
+		delete[] attributeIndex;
+
+		tempMesh->GenerateAdjacencyAndPointReps(0.001f);
+		tempMesh->Optimize(D3DX10_MESHOPT_ATTR_SORT|D3DX10_MESHOPT_VERTEX_CACHE,0,0);
+		tempMesh->CommitToDevice();
+
+		meshCount++;
+		meshes.push_back(tempMesh);
+	}
+	else
+	{
+		MessageBox(0, L"Load Mesh File - Failed",
+			L"Error", MB_OK);
+		return false;
+	}
+
+
+	return true;
+}
+
 HRESULT Application::CreateVertices()
 {
+	LoadMesh(L"sphere.dat");
 	//Licht initialisieren
 	light.dir = D3DXVECTOR3(0.25f, 0.5f, -1.0f);
 	light.ambient = D3DXCOLOR(0.2f, 0.0f, 0.0f, 1.0f);
 	light.diffuse = D3DXCOLOR(1.0f, 1.0f, 1.0f, 1.0f);
 
-	HRESULT hr = 0;
-	// Vertexzahl und -seiten initialisieren
-	g_numVertices = 24;
-	g_numIndices = 36;
-	// Dies ist der Kegel:
-	//Vertex v[] =
- //   {
-	//	//Vorne
-	//	Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f ),
-	//	Vertex( 1.0f, -0.9f, 1.0f, 1.0f, 1.0f, 1.0f, -0.9f, 1.0f),
- //       Vertex( -1.0f, -0.9f, 1.0f, 0.0f, 1.0f, -1.0f, -0.9f, 1.0f),
- //       
-	//	//Rechts
-	//	Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f , 0.0f, 1.0f, 2.0f),
-	//	Vertex( 1.0f, -0.9f, -0.9f, 1.0f, 1.0f, 1.0f, -0.9f, -0.9f), //hinten
-	//	Vertex( 1.0f, -0.9f, 1.0f, 0.0f, 1.0f, 1.0f, -0.9f, 1.0f),
-	//	
-	//	//Links
-	//	Vertex( 0.0f, 1.0f, 2.0f, 0.5f, 0.0f, 0.0f, 1.0f, 2.0f ),
-	//	Vertex( -1.0f, -0.9f, 1.0f, 1.0f, 1.0f, -1.0f, -0.9f, 1.0f),
-	//	Vertex( 1.0f, -0.9f, -0.9f, 0.0f, 1.0f, 1.0f, -0.9f, -0.9f), //hinten
-	//	//unten
-	//	Vertex( 1.0f, -0.9f, -0.9f, 0.5f, 0.0f, 1.0f, -0.9f, -0.9f), //hinten
-	//	Vertex( -1.0f, -0.9f, 1.0f, 1.0f, 1.0f, -1.0f, -0.9f, 1.0f), //Vlinks
-	//	Vertex( 1.0f, -0.9f, 1.0f, 0.0f, 1.0f, 1.0f, -0.9f, 1.0f), //Vrechts
- //   };
-	Vertex v[24];
-	// Front Face
-	v[0] = Vertex(-1.0f, -1.0f, -1.0f, 0.0f, 1.0f,-1.0f, -1.0f, -1.0f);
-	v[1] = Vertex(-1.0f,  1.0f, -1.0f, 0.0f, 0.0f,-1.0f,  1.0f, -1.0f);
-	v[2] = Vertex( 1.0f,  1.0f, -1.0f, 1.0f, 0.0f, 1.0f,  1.0f, -1.0f);
-	v[3] = Vertex( 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, -1.0f, -1.0f);
-
-	// Back Face
-	v[4] = Vertex(-1.0f, -1.0f, 1.0f, 1.0f, 1.0f,-1.0f, -1.0f, 1.0f);
-	v[5] = Vertex( 1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, -1.0f, 1.0f);
-	v[6] = Vertex( 1.0f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,  1.0f, 1.0f);
-	v[7] = Vertex(-1.0f,  1.0f, 1.0f, 1.0f, 0.0f,-1.0f,  1.0f, 1.0f);
-
-	// Top Face
-	v[8]  = Vertex(-1.0f, 1.0f, -1.0f, 0.0f, 1.0f,-1.0f, 1.0f, -1.0f);
-	v[9]  = Vertex(-1.0f, 1.0f,  1.0f, 0.0f, 0.0f,-1.0f, 1.0f,  1.0f);
-	v[10] = Vertex( 1.0f, 1.0f,  1.0f, 1.0f, 0.0f, 1.0f, 1.0f,  1.0f);
-	v[11] = Vertex( 1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f);
-
-	// Bottom Face
-	v[12] = Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f,-1.0f, -1.0f, -1.0f);
-	v[13] = Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f, 1.0f, -1.0f, -1.0f);
-	v[14] = Vertex( 1.0f, -1.0f,  1.0f, 0.0f, 0.0f, 1.0f, -1.0f,  1.0f);
-	v[15] = Vertex(-1.0f, -1.0f,  1.0f, 1.0f, 0.0f,-1.0f, -1.0f,  1.0f);
-
-	// Left Face
-	v[16] = Vertex(-1.0f, -1.0f,  1.0f, 0.0f, 1.0f,-1.0f, -1.0f,  1.0f);
-	v[17] = Vertex(-1.0f,  1.0f,  1.0f, 0.0f, 0.0f,-1.0f,  1.0f,  1.0f);
-	v[18] = Vertex(-1.0f,  1.0f, -1.0f, 1.0f, 0.0f,-1.0f,  1.0f, -1.0f);
-	v[19] = Vertex(-1.0f, -1.0f, -1.0f, 1.0f, 1.0f,-1.0f, -1.0f, -1.0f);
-
-	// Right Face
-	v[20] = Vertex( 1.0f, -1.0f, -1.0f, 0.0f, 1.0f, 1.0f, -1.0f, -1.0f);
-	v[21] = Vertex( 1.0f,  1.0f, -1.0f, 0.0f, 0.0f, 1.0f,  1.0f, -1.0f);
-	v[22] = Vertex( 1.0f,  1.0f,  1.0f, 1.0f, 0.0f, 1.0f,  1.0f,  1.0f);
-	v[23] = Vertex( 1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, -1.0f,  1.0f);
-
-	//  Index für Kegel
-	/*DWORD i[] =
-    {
-		0,1,2,
-		3,4,5,
-		6,7,8,
-		9,10,11
-    };*/
-	DWORD i[36] =
-	{
-		0,1,2,
-		0,2,3,
-		4,5,6,
-		4,6,7,
-		8,9,10,
-		8,10,11,
-		12,13,14,
-		12,14,15,
-		16,17,18,
-		16,18,19,
-		20,21,22,
-		20,22,23
-	};
-
-	//// Front Face
-	//i[0] = 0; i[1] = 1; i[2] = 2;
-	//i[3] = 0; i[4] = 2; i[5] = 3;
-
-	//// Back Face
-	//i[6] = 4; i[7]  = 5; i[8]  = 6;
-	//i[9] = 4; i[10] = 6; i[11] = 7;
-
-	//// Top Face
-	//i[12] = 8; i[13] =  9; i[14] = 10;
-	//i[15] = 8; i[16] = 10; i[17] = 11;
-
-	//// Bottom Face
-	//i[18] = 12; i[19] = 13; i[20] = 14;
-	//i[21] = 12; i[22] = 14; i[23] = 15;
-
-	//// Left Face
-	//i[24] = 16; i[25] = 17; i[26] = 18;
-	//i[27] = 16; i[28] = 18; i[29] = 19;
-
-	//// Right Face
-	//i[30] = 20; i[31] = 21; i[32] = 22;
-	//i[33] = 20; i[34] = 22; i[35] = 23;
-
-	D3D10_BUFFER_DESC bd;
-	bd.Usage = D3D10_USAGE_IMMUTABLE;//D3D10_USAGE_DEFAULT;
-	bd.ByteWidth = sizeof(Vertex) * g_numVertices;
-	bd.BindFlags = D3D10_BIND_VERTEX_BUFFER;
-	bd.CPUAccessFlags = 0;
-	bd.MiscFlags = 0;
-	D3D10_SUBRESOURCE_DATA InitData;
-	InitData.pSysMem = v;
-	hr = g_pd3dDevice->CreateBuffer(&bd, &InitData, &g_pVertexBuffer);
-	if (FAILED(hr)) return hr;
-
-	// VertexBuffer in den InputAssembler schmeissen
-	UINT stride = sizeof(Vertex);
-	UINT offset = 0;
-	g_pd3dDevice->IASetVertexBuffers(0, 1, &g_pVertexBuffer, &stride, &offset);
-
-	// IndexBuffer erzeugen
-
-	bd.Usage = D3D10_USAGE_IMMUTABLE;//D3D10_USAGE_DEFAULT;
-	bd.ByteWidth = sizeof(DWORD) * g_numIndices;
-	bd.BindFlags = D3D10_BIND_INDEX_BUFFER;
-	bd.CPUAccessFlags = 0;
-	bd.MiscFlags = 0;
-	InitData.pSysMem = i;
-	hr = g_pd3dDevice->CreateBuffer(&bd, &InitData, &g_pIndexBuffer);
-	if (FAILED(hr)) return hr;
-
-	// IndexBuffer auch in den IA schmeissen
-	g_pd3dDevice->IASetIndexBuffer(g_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-
-	return hr;
+	return TRUE;
 }
 
 void Application::Render()
@@ -431,8 +417,7 @@ void Application::Render()
     g_pViewVariable->SetMatrix( ( float* )&g_View );
     g_pProjectionVariable->SetMatrix( ( float* )&g_Projection );
 	g_WVPVariable->SetMatrix( (float*)&g_WVP );
-	// Texturevariable in FX setzen
-	fxDiffuseMapVar->SetResource(g_DiffuseMapResourceView);
+
 	fxLightVar->SetRawValue(&light, 0, sizeof(Light));
 	//
     // Clear the depth buffer to 1.0 (max depth)
@@ -446,8 +431,13 @@ void Application::Render()
     g_pTechniqueRender->GetDesc( &techDesc );
     for( UINT p = 0; p < techDesc.Passes; ++p )
     {
-        g_pTechniqueRender->GetPassByIndex( p )->Apply( 0 );
-        g_pd3dDevice->DrawIndexed( g_numIndices, 0, 0 );
+		for(UINT subsetID = 0; subsetID < meshSubsets[0]; ++subsetID)
+		{
+			// Texturevariable in FX setzen
+			fxDiffuseMapVar->SetResource(TextureResourceViews[subsetID]);
+			g_pTechniqueRender->GetPassByIndex( p )->Apply( 0 );
+			meshes[0]->DrawSubset(subsetID);
+		}
     }
 
     //

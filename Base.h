@@ -8,6 +8,7 @@
 #include <dinput.h>
 
 
+
 class Base
 {
 public:
