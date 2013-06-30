@@ -11,23 +11,21 @@ Base::Base(HINSTANCE hInstance)
 	g_pRenderTargetView = NULL;
 	g_pDepthStencil = NULL;
 	g_pDepthStencilView = NULL;
+	g_pEffect = NULL;
+	DIKeyboard = NULL;
+	DIMouse = NULL;
+	DirectInput = NULL;
+
 	rotx = 0;
 	rotz = 0;
+	moveUD = 0;
+	moveLR = 0;
+	moveZ = 0;
 }
 
 Base::~Base(void)
 {
-	ReleaseCOM(g_pRenderTargetView);
-	ReleaseCOM(g_pRenderTargetView);
-	ReleaseCOM(g_pSwapChain);
-	ReleaseCOM(g_pRenderTargetView);
-	ReleaseCOM(g_pd3dDevice);
-	ReleaseCOM(g_pDepthStencil);
-	ReleaseCOM(g_pDepthStencilView);
-	ReleaseCOM(g_pDepthStencilView);
-	DIKeyboard->Unacquire();
-	DIMouse->Unacquire();
-	DirectInput->Release();
+	CleanupDevice();
 }
 
 //--------------------------------------------------------------------------------------
@@ -58,7 +56,8 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
 
 int Base::Run() {
 	    // Main message loop
-    MSG msg = {0};
+	MSG msg;
+	ZeroMemory(&msg, sizeof(MSG));
     while( WM_QUIT != msg.message )
     {
         if( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) )
@@ -72,7 +71,6 @@ int Base::Run() {
             Render();
         }
     }
-
     CleanupDevice();
     return ( int )msg.wParam;
 }
@@ -223,6 +221,9 @@ bool Base::InitDirectInput(HINSTANCE hInstance)
 
 void Base::DetectInput()
 {
+	float l_delta_mouse = 0.001f;
+	float l_deltarot = 0.005f;
+	
 	DIMOUSESTATE mouseCurrState;
 
 	BYTE keyboardState[256];
@@ -233,45 +234,41 @@ void Base::DetectInput()
 	DIMouse->GetDeviceState(sizeof(DIMOUSESTATE), &mouseCurrState);
 
 	DIKeyboard->GetDeviceState(sizeof(keyboardState),(LPVOID)&keyboardState);
-	float r = 0.005f;
-
+	
 	if(keyboardState[DIK_ESCAPE] & 0x80)
 		PostMessage(g_hWnd, WM_DESTROY, 0, 0);
 
 	if(keyboardState[DIK_LEFT] & 0x80)
 	{
-		rotz -= r;
+		rotz -= l_deltarot;
 	}
 	if(keyboardState[DIK_RIGHT] & 0x80)
 	{
-		rotz += r;
+		rotz += l_deltarot;
 	}
 	if(keyboardState[DIK_UP] & 0x80)
 	{
-		rotx += r;
+		rotx += l_deltarot;
 	}
 	if(keyboardState[DIK_DOWN] & 0x80)
 	{
-		rotx -= r;
+		rotx -= l_deltarot;
 	}
 	if(mouseCurrState.lX != mouseLastState.lX)
 	{
-		moveLR -= (mouseCurrState.lX * 0.001f);
+		moveLR -= (mouseCurrState.lX * l_delta_mouse);
 	}
 	if(mouseCurrState.lY != mouseLastState.lY)
 	{
-		moveUD += (mouseCurrState.lY * 0.001f);
+		moveUD += (mouseCurrState.lY * l_delta_mouse);
 	}
-
-	if ( rotx > (float) 6.283185 )
-		rotx -=  (float)6.283185;
-	else if ( rotx < 0 )
-		rotx =  (float)6.283185 + rotx;
-
-	if ( rotz > (float)6.283185 )
-		rotz -=  (float)6.283185;
-	else if ( rotz < 0 )
-		rotz =  (float)6.283185 + rotz;
+	if(mouseCurrState.lZ != mouseLastState.lZ)
+	{
+		moveZ += (mouseCurrState.lZ * l_delta_mouse);
+	}
+	
+	LimitWithinTwoPi(rotx);
+	LimitWithinTwoPi(rotz);
 
 	mouseLastState = mouseCurrState;
 
@@ -282,7 +279,14 @@ void Base::Render()
 {
 }
 
-
+void Base::LimitWithinTwoPi(float &r) 
+{
+	float c_2PI = 6.283185f;
+	if ( r > c_2PI )
+		r -=  c_2PI;
+	else if ( r < 0 )
+		r =  c_2PI + r;
+}
 
 
 //--------------------------------------------------------------------------------------
@@ -291,11 +295,15 @@ void Base::Render()
 void Base::CleanupDevice()
 {
     if( g_pd3dDevice ) g_pd3dDevice->ClearState();
-
-    if( g_pEffect ) g_pEffect->Release();
-    if( g_pRenderTargetView ) g_pRenderTargetView->Release();
-    if( g_pDepthStencil ) g_pDepthStencil->Release();
-    if( g_pDepthStencilView ) g_pDepthStencilView->Release();
-    if( g_pSwapChain ) g_pSwapChain->Release();
-    if( g_pd3dDevice ) g_pd3dDevice->Release();
+	ReleaseCOM(g_pRenderTargetView);
+	ReleaseCOM(g_pSwapChain);
+	ReleaseCOM(g_pRenderTargetView);
+	ReleaseCOM(g_pd3dDevice);
+	ReleaseCOM(g_pDepthStencil);
+	ReleaseCOM(g_pDepthStencilView);
+	ReleaseCOM(g_pEffect);
+	ReleaseCOM(g_pd3dDevice);	
+	DIKeyboard->Unacquire();
+	DIMouse->Unacquire();
+	ReleaseCOM(DirectInput);
 }

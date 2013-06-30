@@ -35,6 +35,7 @@ protected:
 	float rotz;
 	float moveUD;
 	float moveLR;
+	float moveZ;
 
 	D3DXMATRIX Rotationx;
 	D3DXMATRIX Rotationz;
@@ -46,6 +47,7 @@ protected:
 	void InitDevice();
 	bool InitDirectInput(HINSTANCE hInstance);
 	void DetectInput();
+	void LimitWithinTwoPi(float &r) ;
 };
 #endif
 

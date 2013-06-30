@@ -13,6 +13,7 @@
 
 using namespace std;
 
+// Vertexlayout
 D3D10_INPUT_ELEMENT_DESC layout[] =
 {
 	{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
@@ -112,15 +113,24 @@ Application::Application(HINSTANCE hInstance) : Base(hInstance) {
 	D3DXMatrixIdentity(&l_Rotation);
 	D3DXMatrixIdentity(&l_Transform);
 	rot = 0.01f;
-	int meshTextures = 0;
+	meshTextures = 0;
+	meshCount = 0;
+	g_DiffuseMapResourceView = NULL;
+	g_pIndexBuffer = NULL;
+	g_pVertexBuffer = NULL;
+	g_pVertexLayout = NULL;
 }
 
 Application::~Application() 
 {
-	if( g_pIndexBuffer ) g_pIndexBuffer->Release();
-    if( g_pVertexLayout ) g_pVertexLayout->Release();
-    if( g_pVertexBuffer ) g_pVertexBuffer->Release();
-	if( g_DiffuseMapResourceView ) g_DiffuseMapResourceView->Release();
+	ReleaseCOM(g_pIndexBuffer);
+	ReleaseCOM(g_pVertexLayout);
+	ReleaseCOM(g_pVertexBuffer);
+	ReleaseCOM(g_DiffuseMapResourceView);
+	for(int i = 0; i < meshCount; i++)
+	{
+		ReleaseCOM(meshes[i]);
+	}
 }
 
 void Application::initApp() 
@@ -400,15 +410,11 @@ void Application::Render()
 	//D3DXMatrixRotationAxis(&l_Rotation, &rotyaxis, rot);
 	D3DXMatrixRotationAxis(&Rotationx, &rotxaxis, rotx);
 	D3DXMatrixRotationAxis(&Rotationz, &rotzaxis, rotz);
-	D3DXMatrixTranslation( &l_Translation, 0.0f, 0.0f, 4.0f );
+	D3DXMatrixTranslation( &l_Translation, moveLR, moveUD, moveZ);
 	l_Transform = l_Translation * l_Rotation * Rotationx * Rotationz;
 
 	rot += .0005f;
-
-	if ( rot > (float)6.283185 )
-		rot -=  (float)6.283185;
-	else if ( rot < 0 )
-		rot =  (float)6.283185 + rot;
+	Base::LimitWithinTwoPi(rot);
 
 	g_WVP = g_World *l_Transform * g_View * g_Projection;
 	
