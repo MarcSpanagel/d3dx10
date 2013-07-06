@@ -23,7 +23,7 @@ D3D10_INPUT_ELEMENT_DESC layout[] =
 	{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20,
 	D3D10_INPUT_PER_VERTEX_DATA, 0 },
 };
-
+UINT numVertexElements = sizeof(layout) / sizeof(layout[0]);
 class Application : public Base
 {
 public:
@@ -36,7 +36,6 @@ public:
 	HRESULT CreateVertices();
 	HRESULT InitWireframe();
 	bool LoadMesh(wstring filename);
-
 
 private:
 	ID3D10EffectTechnique*      g_pTechniqueRender;
@@ -55,7 +54,6 @@ private:
 	//ID3D10EffectVectorVariable* g_pLightColorVariable;
 	ID3D10EffectVectorVariable* g_pOutputColorVariable;
 	D3DXMATRIX                  g_World;
-	D3DXMATRIX                  g_View;
 	D3DXMATRIX                  g_Projection;
 	D3DXMATRIX                  g_WVP;
 	D3DXMATRIX					l_Scale;
@@ -178,9 +176,6 @@ HRESULT Application::SetupViewAndBuffer()
     D3DXMatrixIdentity( &g_World );
     // Initialize the view matrix
 
-	D3DXVECTOR3 Eye( 0.0f, 4.0f,-11.0f );
-    D3DXVECTOR3 At( 0.0f, 0.0f, 0.0f );
-    D3DXVECTOR3 Up( 0.0f, 1.0f, 0.0f );
     D3DXMatrixLookAtLH( &g_View, &Eye, &At, &Up );
     // Initialize the projection matrix
 	RECT rc;
@@ -188,8 +183,6 @@ HRESULT Application::SetupViewAndBuffer()
     UINT width = rc.right - rc.left;
     UINT height = rc.bottom - rc.top;
     D3DXMatrixPerspectiveFovLH( &g_Projection, ( float )D3DX_PI * 0.25f, width / ( FLOAT )height, 0.0001f, 100.0f );
-	
-
     return TRUE;
 }
 
@@ -240,12 +233,12 @@ HRESULT Application::CreateFX()
 	fxLightVar  = g_pEffect->GetVariableByName("light");
 	// ---------------------------
 
-	UINT numElements = sizeof(layout) / sizeof(layout[0]);
+	
 
 	// -------------VertexLayout initialisieren----------------
 	D3D10_PASS_DESC PassDesc;
 	g_pTechniqueRender->GetPassByIndex(0)->GetDesc(&PassDesc);
-	hr = g_pd3dDevice->CreateInputLayout(layout, numElements,
+	hr = g_pd3dDevice->CreateInputLayout(layout, numVertexElements,
 		PassDesc.pIAInputSignature, PassDesc.IAInputSignatureSize,
 		&g_pVertexLayout);
 
@@ -282,7 +275,7 @@ bool Application::LoadMesh(wstring filename)
 
 		hr = D3DX10CreateMesh(g_pd3dDevice,
 			layout, 
-			3, 
+			numVertexElements, 
 			layout[0].SemanticName, 
 			meshVertices, 
 			meshTriangles, 
@@ -430,8 +423,6 @@ void Application::Render()
 	
 	//
     g_pd3dDevice->ClearDepthStencilView( g_pDepthStencilView, D3D10_CLEAR_DEPTH, 1.0f, 0 );
-	//
-    // Render the first cube
     
     D3D10_TECHNIQUE_DESC techDesc;
     g_pTechniqueRender->GetDesc( &techDesc );

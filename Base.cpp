@@ -1,4 +1,5 @@
 #include "Base.h"
+#include <iostream>
 
 
 Base::Base(HINSTANCE hInstance)
@@ -16,11 +17,27 @@ Base::Base(HINSTANCE hInstance)
 	DIMouse = NULL;
 	DirectInput = NULL;
 
+	Eye = D3DXVECTOR3( 0.0f, 0.0f, -20.0f );
+    At = D3DXVECTOR3( 0.0f, 0.0f, 0.0f );
+    Up = D3DXVECTOR3( 0.0f, 1.0f, 0.0f );
+	FW = D3DXVECTOR3( 0.0f, 0.0f, 1.0f );
+	LR = D3DXVECTOR3( 1.0f, 0.0f, 0.0f);
+	DefaultFW = D3DXVECTOR3( 0.0f, 0.0f, 1.0f );
+	DefaultLR = D3DXVECTOR3( 1.0f, 0.0f, 0.0f );
+
+	// Rotation
 	rotx = 0;
 	rotz = 0;
 	moveUD = 0;
 	moveLR = 0;
 	moveZ = 0;
+	//Camera
+	lookBF = 0.0f;
+	lookLR = 0.0f;
+	yaw = 0.0f;
+	pitch = 0.0f;
+	
+
 }
 
 Base::~Base(void)
@@ -256,23 +273,69 @@ void Base::DetectInput()
 	}
 	if(mouseCurrState.lX != mouseLastState.lX)
 	{
-		moveLR -= (mouseCurrState.lX * l_delta_mouse);
+		//moveLR -= (mouseCurrState.lX * l_delta_mouse);
+		yaw += mouseCurrState.lX * l_delta_mouse;
 	}
 	if(mouseCurrState.lY != mouseLastState.lY)
 	{
-		moveUD += (mouseCurrState.lY * l_delta_mouse);
+		//moveUD += (mouseCurrState.lY * l_delta_mouse);
+		pitch += mouseCurrState.lY * l_delta_mouse;
 	}
 	if(mouseCurrState.lZ != mouseLastState.lZ)
 	{
 		moveZ += (mouseCurrState.lZ * l_delta_mouse);
+	}
+
+	// Look up and down
+	if(keyboardState[DIK_A] & 0x80)
+	{
+		lookLR -= l_deltarot;
+	}
+	if(keyboardState[DIK_D] & 0x80)
+	{
+		lookLR += l_deltarot;
+	}
+	if(keyboardState[DIK_W] & 0x80)
+	{
+		lookBF += l_deltarot;
+	}
+	if(keyboardState[DIK_S] & 0x80)
+	{
+		lookBF -= l_deltarot;
 	}
 	
 	LimitWithinTwoPi(rotx);
 	LimitWithinTwoPi(rotz);
 
 	mouseLastState = mouseCurrState;
+	UpdateCamera();
 
 	return;
+}
+
+void Base::UpdateCamera() 
+{
+	D3DXMatrixRotationYawPitchRoll(&cameraRotation, yaw, pitch, 0);
+	// Rotate the Default-ForwardVector and put the result in At
+	D3DXVec3TransformCoord(&At, &DefaultFW, &cameraRotation);
+	D3DXVec3Normalize(&At, &At);// Normalize outofbounds
+
+	D3DXMATRIX RotateY;
+	// Rotate Tempvariable RotateY around the y-axis with the angle of yaw.
+	D3DXMatrixRotationY(&RotateY, yaw);
+
+	D3DXVec3TransformNormal(&LR, &DefaultLR, &RotateY);
+	D3DXVec3TransformNormal(&Up, &Up, &RotateY);
+	D3DXVec3TransformNormal(&FW, &DefaultFW, &RotateY);
+
+	Eye += lookLR * LR;
+	Eye += lookBF * FW;
+
+	lookLR = 0.0f;
+	lookBF = 0.0f;
+
+	At = Eye + At;
+	D3DXMatrixLookAtLH( &g_View, &Eye, &At, &Up );
 }
 
 void Base::Render() 
