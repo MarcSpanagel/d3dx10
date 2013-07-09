@@ -1,6 +1,7 @@
 #include "Base.h"
 #include <iostream>
-
+#include <sstream>
+using namespace std;
 
 Base::Base(HINSTANCE hInstance)
 {
@@ -17,7 +18,7 @@ Base::Base(HINSTANCE hInstance)
 	DIMouse = NULL;
 	DirectInput = NULL;
 
-	Eye = D3DXVECTOR3( 0.0f, 0.0f, -20.0f );
+	Eye = D3DXVECTOR3( 0.0f, 30.0f, -70.0f );
     At = D3DXVECTOR3( 0.0f, 0.0f, 0.0f );
     Up = D3DXVECTOR3( 0.0f, 1.0f, 0.0f );
 	FW = D3DXVECTOR3( 0.0f, 0.0f, 1.0f );
@@ -238,8 +239,8 @@ bool Base::InitDirectInput(HINSTANCE hInstance)
 
 void Base::DetectInput()
 {
-	float l_delta_mouse = 0.001f;
-	float l_deltarot = 0.005f;
+	float l_delta_mouse = 0.01f;
+	float l_deltarot = 0.05f;
 	
 	DIMOUSESTATE mouseCurrState;
 
@@ -326,6 +327,9 @@ void Base::UpdateCamera()
 
 	D3DXVec3TransformNormal(&LR, &DefaultLR, &RotateY);
 	D3DXVec3TransformNormal(&Up, &Up, &RotateY);
+
+
+	//_RPT1( 0, "%d, %d, %d\n", Up.x, Up.y, Up.z );
 	D3DXVec3TransformNormal(&FW, &DefaultFW, &RotateY);
 
 	Eye += lookLR * LR;

@@ -5,25 +5,18 @@
 #include "Base.h"
 #include "Vertex.h"
 #include "Light.h"
+#include "Mountains.h"
 #include <fstream>
 #include <istream>
 #include <vector>
 #include <string>
 #include <iostream>
+#include "Sphere.h"
 
 using namespace std;
 
-// Vertexlayout
-D3D10_INPUT_ELEMENT_DESC layout[] =
-{
-	{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
-	D3D10_INPUT_PER_VERTEX_DATA, 0 },
-	{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
-	D3D10_INPUT_PER_VERTEX_DATA, 0 },
-	{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20,
-	D3D10_INPUT_PER_VERTEX_DATA, 0 },
-};
-UINT numVertexElements = sizeof(layout) / sizeof(layout[0]);
+
+
 class Application : public Base
 {
 public:
@@ -35,7 +28,7 @@ public:
 	HRESULT CreateFX();
 	HRESULT CreateVertices();
 	HRESULT InitWireframe();
-	bool LoadMesh(wstring filename);
+
 
 private:
 	ID3D10EffectTechnique*      g_pTechniqueRender;
@@ -60,6 +53,8 @@ private:
 	D3DXMATRIX					l_Translation;
 	D3DXMATRIX					l_Rotation;
 	D3DXMATRIX					l_Transform;
+
+	D3DXMATRIX					mMountainWorld;
 	float rot;
 
 	UINT g_numIndices;
@@ -72,11 +67,8 @@ private:
 
 	Light light;
 
-	vector<ID3DX10Mesh*> meshes;
-	int meshCount;
-	vector<UINT> meshSubsets;
-	int meshTextures;
-	vector<ID3D10ShaderResourceView*> TextureResourceViews;
+	Mountains mountains;
+	Sphere sphere;
 };
 
 //--------------------------------------------------------------------------------------
@@ -110,9 +102,9 @@ Application::Application(HINSTANCE hInstance) : Base(hInstance) {
 	D3DXMatrixIdentity(&g_WVP);
 	D3DXMatrixIdentity(&l_Rotation);
 	D3DXMatrixIdentity(&l_Transform);
+	D3DXMatrixIdentity(&mMountainWorld);
 	rot = 0.01f;
-	meshTextures = 0;
-	meshCount = 0;
+
 	g_DiffuseMapResourceView = NULL;
 	g_pIndexBuffer = NULL;
 	g_pVertexBuffer = NULL;
@@ -125,10 +117,7 @@ Application::~Application()
 	ReleaseCOM(g_pVertexLayout);
 	ReleaseCOM(g_pVertexBuffer);
 	ReleaseCOM(g_DiffuseMapResourceView);
-	for(int i = 0; i < meshCount; i++)
-	{
-		ReleaseCOM(meshes[i]);
-	}
+	
 }
 
 void Application::initApp() 
@@ -159,14 +148,6 @@ HRESULT Application::SetupViewAndBuffer()
 		return 0;
 	}
 
-	/*if ( FAILED(InitWireframe()) ) 
-	{
-		CleanupDevice();
-		MessageBox(0, L"RasterizerStateCreation - Failed",
-			L"Error", MB_OK);
-		return 0;
-	}*/
-
 	// Set the input layout
     g_pd3dDevice->IASetInputLayout( g_pVertexLayout );
     // Set primitive topology
@@ -182,25 +163,10 @@ HRESULT Application::SetupViewAndBuffer()
     GetClientRect( g_hWnd, &rc );
     UINT width = rc.right - rc.left;
     UINT height = rc.bottom - rc.top;
-    D3DXMatrixPerspectiveFovLH( &g_Projection, ( float )D3DX_PI * 0.25f, width / ( FLOAT )height, 0.0001f, 100.0f );
+    D3DXMatrixPerspectiveFovLH( &g_Projection, ( float )D3DX_PI * 0.25f, width / ( FLOAT )height, 1.000f, 1000.0f );
     return TRUE;
 }
 
-HRESULT Application::InitWireframe() 
-{
-	D3D10_RASTERIZER_DESC wfdesc;
-	ZeroMemory(&wfdesc, sizeof(D3D10_RASTERIZER_DESC));
-	wfdesc.FillMode = D3D10_FILL_WIREFRAME; //D3D10_FILL_SOLID->Default
-	wfdesc.CullMode = D3D10_CULL_FRONT;
-	wfdesc.FrontCounterClockwise = false;
-	HRESULT hr = g_pd3dDevice->CreateRasterizerState(&wfdesc, &WireFrame);
-
-	if(FAILED(hr))
-	{
-		return false;
-	}
-	g_pd3dDevice->RSSetState(WireFrame);
-}
 
 HRESULT Application::CreateFX()
 {
@@ -233,8 +199,6 @@ HRESULT Application::CreateFX()
 	fxLightVar  = g_pEffect->GetVariableByName("light");
 	// ---------------------------
 
-	
-
 	// -------------VertexLayout initialisieren----------------
 	D3D10_PASS_DESC PassDesc;
 	g_pTechniqueRender->GetPassByIndex(0)->GetDesc(&PassDesc);
@@ -249,122 +213,12 @@ HRESULT Application::CreateFX()
 	return hr;
 }
 
-bool Application::LoadMesh(wstring filename)
-{
-	HRESULT hr = 0;
 
-	ID3DX10Mesh* tempMesh; 
-
-	wifstream fileIn (filename.c_str());
-	wstring skipString;
-
-	UINT meshVertices  = 0;
-	UINT meshTriangles = 0;
-    UINT tempMeshSubsets = 0;
-
-	if (fileIn)
-	{
-		fileIn >> skipString; // #Subsets
-		fileIn >> tempMeshSubsets;
-		fileIn >> skipString; // #Vertices
-		fileIn >> meshVertices;
-		fileIn >> skipString; // #Faces (Triangles)
-		fileIn >> meshTriangles;
-        
-		meshSubsets.push_back(tempMeshSubsets);
-
-		hr = D3DX10CreateMesh(g_pd3dDevice,
-			layout, 
-			numVertexElements, 
-			layout[0].SemanticName, 
-			meshVertices, 
-			meshTriangles, 
-			D3DX10_MESH_32_BIT, 
-			&tempMesh);
-
-		if(FAILED(hr))
-		{
-			MessageBox(0, L"Mesh Creation - Failed",
-				L"Error", MB_OK);
-			return false;
-		}
-
-		fileIn >> skipString;	//#Subset_info
-		for(UINT i = 0; i < tempMeshSubsets; ++i)
-		{
-			std::wstring diffuseMapFilename;
-
-			fileIn >> diffuseMapFilename;
-
-			ID3D10ShaderResourceView* DiffuseMapResourceView;
-
-			D3DX10CreateShaderResourceViewFromFile(g_pd3dDevice,
-				diffuseMapFilename.c_str(), 0, 0, &DiffuseMapResourceView, 0 );
-
-			TextureResourceViews.push_back(DiffuseMapResourceView);
-
-			meshTextures++;
-		}
-
-		Vertex* verts = new Vertex[meshVertices];
-		fileIn >> skipString;	//#Vertex_info
-		for(UINT i = 0; i < meshVertices; ++i)
-		{
-			fileIn >> skipString;	//Vertex Position
-			fileIn >> verts[i].Pos.x;
-			fileIn >> verts[i].Pos.y;
-			fileIn >> verts[i].Pos.z;
-
-			fileIn >> skipString;	//Vertex Normal
-			fileIn >> verts[i].normal.x;
-			fileIn >> verts[i].normal.y;
-			fileIn >> verts[i].normal.z;
-
-			fileIn >> skipString;	//Vertex Texture Coordinates
-			fileIn >> verts[i].Tex.x;
-			fileIn >> verts[i].Tex.y;
-		}
-		tempMesh->SetVertexData(0, verts);
-
-		delete[] verts;
-
-		DWORD* indices = new DWORD[meshTriangles*3];
-		UINT* attributeIndex = new UINT[meshTriangles];
-		fileIn >> skipString;	//#Face_Index
-		for(UINT i = 0; i < meshTriangles; ++i)
-		{
-			fileIn >> indices[i*3+0];
-			fileIn >> indices[i*3+1];
-			fileIn >> indices[i*3+2];
-			fileIn >> attributeIndex[i];	//Current Subset
-		}
-		tempMesh->SetIndexData(indices, meshTriangles*3);
-		tempMesh->SetAttributeData(attributeIndex);
-
-		delete[] indices;
-		delete[] attributeIndex;
-
-		tempMesh->GenerateAdjacencyAndPointReps(0.001f);
-		tempMesh->Optimize(D3DX10_MESHOPT_ATTR_SORT|D3DX10_MESHOPT_VERTEX_CACHE,0,0);
-		tempMesh->CommitToDevice();
-
-		meshCount++;
-		meshes.push_back(tempMesh);
-	}
-	else
-	{
-		MessageBox(0, L"Load Mesh File - Failed",
-			L"Error", MB_OK);
-		return false;
-	}
-
-
-	return true;
-}
 
 HRESULT Application::CreateVertices()
 {
-	LoadMesh(L"sphere.dat");
+	mountains.init(g_pd3dDevice, 700, 700, 0.3f);
+	sphere.init(g_pd3dDevice);
 	//Licht initialisieren
 	light.dir = D3DXVECTOR3(0.25f, 0.5f, -1.0f);
 	light.ambient = D3DXCOLOR(0.2f, 0.0f, 0.0f, 1.0f);
@@ -392,8 +246,6 @@ void Application::Render()
 
 	float ClearColor[4] = { 0.0f, 0.125f, 0.3f, 0.5f }; //red, green, blue, alpha
     g_pd3dDevice->ClearRenderTargetView( g_pRenderTargetView, ClearColor );
-	
-	//
 
 	////////////////////Rotation//////////////////////////////////////////////////////////////////////
 	D3DXVECTOR3 rotyaxis(0.0f, 1.0f, 0.0f);
@@ -409,13 +261,15 @@ void Application::Render()
 	rot += .0005f;
 	Base::LimitWithinTwoPi(rot);
 
-	g_WVP = g_World *l_Transform * g_View * g_Projection;
+	D3DXMatrixTranslation(&mMountainWorld, 0,-20,0);
+
+	
 	
 	// Update variables
     g_pWorldVariable->SetMatrix( ( float* )&g_World );
     g_pViewVariable->SetMatrix( ( float* )&g_View );
     g_pProjectionVariable->SetMatrix( ( float* )&g_Projection );
-	g_WVPVariable->SetMatrix( (float*)&g_WVP );
+	
 
 	fxLightVar->SetRawValue(&light, 0, sizeof(Light));
 	//
@@ -428,13 +282,23 @@ void Application::Render()
     g_pTechniqueRender->GetDesc( &techDesc );
     for( UINT p = 0; p < techDesc.Passes; ++p )
     {
-		for(UINT subsetID = 0; subsetID < meshSubsets[0]; ++subsetID)
+		ID3D10EffectPass* pass = g_pTechniqueRender->GetPassByIndex(p);
+		//First draw the mountains
+		g_WVP = mMountainWorld*g_View*g_Projection;
+		g_WVPVariable->SetMatrix( (float*)&g_WVP );
+		
+		fxDiffuseMapVar->SetResource(mountains.mGrassMapRV);
+		pass->Apply( 0 );
+		mountains.draw();
+		for(UINT subsetID = 0; subsetID < sphere.meshSubsets[0]; ++subsetID)
 		{
-			// Texturevariable in FX setzen
-			fxDiffuseMapVar->SetResource(TextureResourceViews[subsetID]);
-			g_pTechniqueRender->GetPassByIndex( p )->Apply( 0 );
-			meshes[0]->DrawSubset(subsetID);
+			g_WVP = g_World *l_Transform * g_View * g_Projection;
+			g_WVPVariable->SetMatrix( (float*)&g_WVP );
+			fxDiffuseMapVar->SetResource(sphere.TextureResourceViews[subsetID]);
+			pass->Apply( 0 );
+			sphere.draw(subsetID);
 		}
+		
     }
 
     //
